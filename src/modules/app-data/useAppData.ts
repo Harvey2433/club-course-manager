@@ -1,22 +1,25 @@
-// src/modules/app-data/useAppData.ts
-import { computed, readonly, ref } from 'vue'
-import type { AccountUser } from '../account/types'
+import { readonly, ref } from 'vue'
 import {
-  buildRankingEntries,
-  buildVisibleEnrollmentRecords,
-  createClub,
-  createCourse,
-  createEnrollment,
-  deleteClub,
-  deleteCourse,
-  removeCourseResult,
-  updateClub,
-  updateCourse,
-  uploadCourseResult
-} from './service'
-import { readAppData, writeAppData } from './storage'
+  apiCreateClub,
+  apiCreateCourse,
+  apiDeleteClub,
+  apiDeleteCourse,
+  apiEnrollCourse,
+  apiListClubs,
+  apiListCourses,
+  apiListEnrollmentViews,
+  apiListRanking,
+  apiRemoveCourseResult,
+  apiUpdateClub,
+  apiUpdateCourse,
+  apiUploadCourseResult,
+  type Club,
+  type Course,
+  type EnrollmentView,
+  type RankingEntry
+} from '../../api/backend'
+import { readToken } from '../../api/session'
 import type {
-  AppDataSnapshot,
   CreateClubPayload,
   CreateCoursePayload,
   RemoveCourseResultPayload,
@@ -25,51 +28,94 @@ import type {
   UploadCourseResultPayload
 } from './types'
 
-const clubs = ref<AppDataSnapshot['clubs']>([])
-const courses = ref<AppDataSnapshot['courses']>([])
-const enrollments = ref<AppDataSnapshot['enrollments']>([])
+const clubs = ref<Club[]>([])
+const courses = ref<Course[]>([])
+const enrollmentViews = ref<EnrollmentView[]>([])
+const rankingEntries = ref<RankingEntry[]>([])
 const version = ref(0)
 const initialized = ref(false)
 const actionLoading = ref(false)
 const lastError = ref('')
 
-function applySnapshot(snapshot: AppDataSnapshot) {
-  clubs.value = snapshot.clubs
-  courses.value = snapshot.courses
-  enrollments.value = snapshot.enrollments
-  version.value += 1
-  writeAppData(snapshot)
+function normalizeErrorMessage(error: unknown) {
+  if (typeof error === 'string' && error) {
+    return error
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+
+  return '数据操作失败'
 }
 
-function getSnapshot(): AppDataSnapshot {
-  return {
-    clubs: [...clubs.value],
-    courses: [...courses.value],
-    enrollments: [...enrollments.value]
+function requireToken() {
+  const token = readToken()
+  if (!token) {
+    throw new Error('当前未登录，请先登录')
   }
+  return token
+}
+
+async function refreshAll() {
+  const token = readToken()
+
+  if (!token) {
+    clubs.value = []
+    courses.value = []
+    enrollmentViews.value = []
+    rankingEntries.value = []
+    version.value += 1
+    return
+  }
+
+  const [clubList, courseList, views, ranking] = await Promise.all([
+    apiListClubs(token),
+    apiListCourses(token),
+    apiListEnrollmentViews(token),
+    apiListRanking(token)
+  ])
+
+  clubs.value = clubList
+  courses.value = courseList
+  enrollmentViews.value = views
+  rankingEntries.value = ranking
+  version.value += 1
 }
 
 export function useAppData() {
   async function initialize() {
-    const snapshot = readAppData()
-    clubs.value = snapshot.clubs
-    courses.value = snapshot.courses
-    enrollments.value = snapshot.enrollments
-    initialized.value = true
-    version.value += 1
+    try {
+      await refreshAll()
+      lastError.value = ''
+    } catch (error) {
+      lastError.value = normalizeErrorMessage(error)
+    } finally {
+      initialized.value = true
+    }
   }
 
-  async function runAction(executor: () => AppDataSnapshot) {
+  async function reload() {
+    try {
+      await refreshAll()
+      lastError.value = ''
+    } catch (error) {
+      lastError.value = normalizeErrorMessage(error)
+    }
+  }
+
+  async function runAction<T>(executor: (token: string) => Promise<T>): Promise<T> {
     actionLoading.value = true
     lastError.value = ''
 
     try {
-      const snapshot = executor()
-      applySnapshot(snapshot)
-      return snapshot
+      const token = requireToken()
+      const result = await executor(token)
+      await refreshAll()
+      return result
     } catch (error) {
-      lastError.value = error instanceof Error ? error.message : '数据操作失败'
-      throw error
+      lastError.value = normalizeErrorMessage(error)
+      throw new Error(lastError.value)
     } finally {
       actionLoading.value = false
     }
@@ -77,51 +123,41 @@ export function useAppData() {
 
   return {
     initialize,
+    reload,
     initialized: readonly(initialized),
     clubs: readonly(clubs),
     courses: readonly(courses),
-    enrollments: readonly(enrollments),
+    enrollmentViews: readonly(enrollmentViews),
+    rankingEntries: readonly(rankingEntries),
     version: readonly(version),
     actionLoading: readonly(actionLoading),
     lastError: readonly(lastError),
 
-    createClub: (currentUser: AccountUser | null, payload: CreateClubPayload) =>
-      runAction(() => createClub(currentUser, getSnapshot(), payload)),
+    createClub: (payload: CreateClubPayload) =>
+      runAction((token) => apiCreateClub(token, payload)),
 
-    updateClub: (currentUser: AccountUser | null, payload: UpdateClubPayload) =>
-      runAction(() => updateClub(currentUser, getSnapshot(), payload)),
+    updateClub: (payload: UpdateClubPayload) =>
+      runAction((token) => apiUpdateClub(token, payload)),
 
-    deleteClub: (currentUser: AccountUser | null, clubId: string) =>
-      runAction(() => deleteClub(currentUser, getSnapshot(), clubId)),
+    deleteClub: (clubId: string) =>
+      runAction((token) => apiDeleteClub(token, clubId)),
 
-    createCourse: (currentUser: AccountUser | null, payload: CreateCoursePayload) =>
-      runAction(() => createCourse(currentUser, getSnapshot(), payload)),
+    createCourse: (payload: CreateCoursePayload) =>
+      runAction((token) => apiCreateCourse(token, payload)),
 
-    updateCourse: (currentUser: AccountUser | null, payload: UpdateCoursePayload) =>
-      runAction(() => updateCourse(currentUser, getSnapshot(), payload)),
+    updateCourse: (payload: UpdateCoursePayload) =>
+      runAction((token) => apiUpdateCourse(token, payload)),
 
-    deleteCourse: (currentUser: AccountUser | null, courseId: string) =>
-      runAction(() => deleteCourse(currentUser, getSnapshot(), courseId)),
+    deleteCourse: (courseId: string) =>
+      runAction((token) => apiDeleteCourse(token, courseId)),
 
-    uploadCourseResult: (
-      currentUser: AccountUser | null,
-      payload: UploadCourseResultPayload
-    ) => runAction(() => uploadCourseResult(currentUser, getSnapshot(), payload)),
+    uploadCourseResult: (payload: UploadCourseResultPayload) =>
+      runAction((token) => apiUploadCourseResult(token, payload)),
 
-    removeCourseResult: (
-      currentUser: AccountUser | null,
-      payload: RemoveCourseResultPayload
-    ) => runAction(() => removeCourseResult(currentUser, getSnapshot(), payload)),
+    removeCourseResult: (payload: RemoveCourseResultPayload) =>
+      runAction((token) => apiRemoveCourseResult(token, payload.courseId)),
 
-    createEnrollment: (currentUser: AccountUser | null, courseId: string) =>
-      runAction(() => createEnrollment(currentUser, getSnapshot(), courseId)),
-
-    buildVisibleEnrollmentRecords: (currentUser: AccountUser | null, accounts: AccountUser[]) =>
-      buildVisibleEnrollmentRecords(currentUser, getSnapshot(), accounts),
-
-    buildRankingEntries: (currentUser: AccountUser | null, accounts: AccountUser[]) =>
-      buildRankingEntries(currentUser, getSnapshot(), accounts),
-
-    snapshot: computed(() => getSnapshot())
+    createEnrollment: (courseId: string) =>
+      runAction((token) => apiEnrollCourse(token, courseId))
   }
 }

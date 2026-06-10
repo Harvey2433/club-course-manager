@@ -1,13 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { readAccounts } from '../modules/account/storage'
 import { useAccount } from '../modules/account/useAccount'
-import type { AccountRole, AccountUser } from '../modules/account/types'
+import type { AccountRole, AccountUser } from '../api/backend'
 import { useAppData } from '../modules/app-data/useAppData'
-import {
-  buildRankingEntries,
-  buildVisibleEnrollmentRecords
-} from '../modules/app-data/service'
 
 const {
   initialize: initializeAccount,
@@ -20,9 +15,10 @@ const {
 
 const {
   initialize: initializeData,
+  reload: reloadData,
   clubs,
-  courses,
-  enrollments,
+  enrollmentViews,
+  rankingEntries,
   version,
   actionLoading: dataActionLoading,
   lastError
@@ -44,26 +40,8 @@ const userForm = reactive({
 
 const isAdmin = computed(() => currentUser.value?.role === 'admin')
 
-const snapshot = computed(() => {
-  version.value
-  return {
-    clubs: [...clubs.value],
-    courses: [...courses.value],
-    enrollments: [...enrollments.value]
-  }
-})
-
-const visibleEnrollments = computed(() => {
-  return buildVisibleEnrollmentRecords(
-    currentUser.value,
-    snapshot.value,
-    readAccounts()
-  )
-})
-
-const rankingEntries = computed(() => {
-  return buildRankingEntries(currentUser.value, snapshot.value, readAccounts())
-})
+const visibleEnrollments = computed(() => enrollmentViews.value)
+const rankingList = computed(() => rankingEntries.value)
 
 const selectedAccount = computed(() => {
   return adminAccounts.value.find((item) => item.id === selectedUserId.value) || null
@@ -136,6 +114,7 @@ async function handleSaveUser() {
     })
 
     await loadAdminAccounts()
+    await reloadData()
     localMessage.value = '用户信息已更新'
   } catch (error) {
     localError.value =
@@ -158,7 +137,8 @@ watch(
 )
 
 onMounted(async () => {
-  await Promise.all([initializeAccount(), initializeData()])
+  await initializeAccount()
+  await initializeData()
 
   if (isAdmin.value) {
     await loadAdminAccounts()
@@ -189,11 +169,11 @@ onMounted(async () => {
           <p>按累计选课数降序排序。</p>
         </div>
 
-        <div v-if="rankingEntries.length === 0" class="empty-box">暂无排行数据</div>
+        <div v-if="rankingList.length === 0" class="empty-box">暂无排行数据</div>
 
         <div v-else class="ranking-list">
           <div
-            v-for="(item, index) in rankingEntries"
+            v-for="(item, index) in rankingList"
             :key="item.userId"
             class="ranking-item"
           >

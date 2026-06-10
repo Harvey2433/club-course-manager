@@ -289,6 +289,10 @@ export function useAccountAuthController(
 }
 
 function normalizeErrorMessage(error: unknown) {
+  if (typeof error === 'string' && error) {
+    return error
+  }
+
   if (error instanceof Error && error.message) {
     return error.message
   }

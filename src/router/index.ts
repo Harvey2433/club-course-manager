@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import MainLayout from '../layout/MainLayout.vue'
-import { restoreAccountSession } from '../modules/account/service'
+import { apiCurrentUser } from '../api/backend'
+import { readToken } from '../api/session'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -62,21 +63,21 @@ router.beforeEach(async (to) => {
   }
 
   try {
-    const user = await restoreAccountSession()
+    const token = readToken()
+
+    if (!token) {
+      return { path: '/courses', replace: true }
+    }
+
+    const user = await apiCurrentUser(token)
 
     if (user) {
       return true
     }
 
-    return {
-      path: '/courses',
-      replace: true
-    }
+    return { path: '/courses', replace: true }
   } catch {
-    return {
-      path: '/courses',
-      replace: true
-    }
+    return { path: '/courses', replace: true }
   }
 })
 

@@ -1,42 +1,11 @@
-// src/modules/app-data/types.ts
-export interface Club {
-  id: string
-  name: string
-  description: string
-  createdAt: number
-  updatedAt: number
-}
-
-export interface CourseResultAttachment {
-  fileName: string
-  mimeType: string
-  dataUrl: string
-  uploadedAt: number
-}
-
-export interface Course {
-  id: string
-  clubId: string
-  name: string
-  teacherName: string
-  description: string
-  resultAttachment: CourseResultAttachment | null
-  createdAt: number
-  updatedAt: number
-}
-
-export interface EnrollmentRecord {
-  id: string
-  courseId: string
-  studentUserId: string
-  createdAt: number
-}
-
-export interface AppDataSnapshot {
-  clubs: Club[]
-  courses: Course[]
-  enrollments: EnrollmentRecord[]
-}
+export type {
+  Club,
+  Course,
+  CourseResultAttachment,
+  Enrollment,
+  EnrollmentView,
+  RankingEntry
+} from '../../api/backend'
 
 export interface CreateClubPayload {
   name: string

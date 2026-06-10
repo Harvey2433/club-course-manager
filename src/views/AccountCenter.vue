@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import AccountProfilePage from '../components/account/AccountProfilePage.vue'
 import { useAccount } from '../modules/account/useAccount'
 import { useAccountProfileController } from '../modules/account/useAccountProfileController'
+import type { AccountUser } from '../modules/account/types'
 
 const router = useRouter()
 
@@ -64,7 +65,7 @@ watch(
 
     <AccountProfilePage
       v-else
-      :user="currentUser"
+      :user="currentUser as AccountUser | null"
       :form="profileForm"
       :password-form="passwordForm"
       :avatar="profileAvatar"

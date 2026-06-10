@@ -2,7 +2,6 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useAccount } from '../modules/account/useAccount'
 import { useAppData } from '../modules/app-data/useAppData'
-import { canManageClub } from '../modules/app-data/service'
 
 const {
   initialize: initializeAccount,
@@ -56,7 +55,19 @@ function fillFormByClub(clubId: string) {
 }
 
 function canEditClub(clubId: string) {
-  return canManageClub(currentUser.value, clubId)
+  if (!currentUser.value) {
+    return false
+  }
+
+  if (currentUser.value.role === 'admin') {
+    return true
+  }
+
+  if (currentUser.value.role === 'teacher') {
+    return currentUser.value.managedClubIds.includes(clubId)
+  }
+
+  return false
 }
 
 async function handleSubmitClub() {
@@ -65,14 +76,14 @@ async function handleSubmitClub() {
 
   try {
     if (editingClubId.value) {
-      await updateClub(currentUser.value, {
+      await updateClub({
         id: editingClubId.value,
         name: clubForm.name,
         description: clubForm.description
       })
       localMessage.value = '社团已更新'
     } else {
-      await createClub(currentUser.value, {
+      await createClub({
         name: clubForm.name,
         description: clubForm.description
       })
@@ -96,7 +107,7 @@ async function handleDeleteClub(clubId: string) {
   }
 
   try {
-    await deleteClub(currentUser.value, clubId)
+    await deleteClub(clubId)
 
     if (editingClubId.value === clubId) {
       resetForm()
@@ -110,7 +121,8 @@ async function handleDeleteClub(clubId: string) {
 }
 
 onMounted(async () => {
-  await Promise.all([initializeAccount(), initializeData()])
+  await initializeAccount()
+  await initializeData()
 })
 </script>
 

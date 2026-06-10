@@ -1,16 +1,22 @@
 <!-- src/views/Courses.vue -->
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useAccount } from '../modules/account/useAccount'
 import { useAppData } from '../modules/app-data/useAppData'
-import type { Course } from '../modules/app-data/types'
-
-const { currentUser, initialized: accountInitialized } = useAccount()
+import type { Course } from '../api/backend'
 
 const {
+  initialize: initializeAccount,
+  currentUser,
+  initialized: accountInitialized
+} = useAccount()
+
+const {
+  initialize: initializeData,
+  reload,
   clubs,
   courses,
-  enrollments,
+  enrollmentViews,
   actionLoading,
   lastError,
   createCourse,
@@ -55,7 +61,7 @@ const selectedCourseIdSet = computed(() => {
   }
 
   return new Set(
-    enrollments.value
+    enrollmentViews.value
       .filter((item) => item.studentUserId === currentUser.value?.id)
       .map((item) => item.courseId)
   )
@@ -97,7 +103,7 @@ function canManageCourse(course: Course) {
 
 function canSelectCourse(course: Course) {
   if (!currentUser.value) {
-    return true
+    return false
   }
 
   if (currentUser.value.role !== 'student') {
@@ -116,7 +122,7 @@ async function handleSubmitCourse() {
 
   try {
     if (editingCourseId.value) {
-      await updateCourse(currentUser.value, {
+      await updateCourse({
         id: editingCourseId.value,
         clubId: form.clubId,
         name: form.name,
@@ -125,7 +131,7 @@ async function handleSubmitCourse() {
       })
       localMessage.value = '课程信息已更新'
     } else {
-      await createCourse(currentUser.value, {
+      await createCourse({
         clubId: form.clubId,
         name: form.name,
         teacherName: form.teacherName,
@@ -165,7 +171,7 @@ async function handleDeleteCourse(course: Course) {
   resetMessages()
 
   try {
-    await deleteCourse(currentUser.value, course.id)
+    await deleteCourse(course.id)
 
     if (editingCourseId.value === course.id) {
       resetForm()
@@ -181,7 +187,7 @@ async function handleSelectCourse(courseId: string) {
   resetMessages()
 
   try {
-    await createEnrollment(currentUser.value, courseId)
+    await createEnrollment(courseId)
     localMessage.value = '选课成功'
   } catch (error) {
     localError.value = error instanceof Error ? error.message : '选课失败，请稍后重试'
@@ -206,7 +212,7 @@ async function handleUploadResult(event: Event, course: Course) {
   try {
     const dataUrl = await readFileAsDataUrl(file)
 
-    await uploadCourseResult(currentUser.value, {
+    await uploadCourseResult({
       courseId: course.id,
       fileName: file.name,
       mimeType: file.type || 'application/octet-stream',
@@ -234,7 +240,7 @@ async function handleRemoveResult(course: Course) {
   resetMessages()
 
   try {
-    await removeCourseResult(currentUser.value, {
+    await removeCourseResult({
       courseId: course.id
     })
     localMessage.value = '课程成果已删除'
@@ -267,6 +273,19 @@ watch(
   },
   { immediate: true }
 )
+
+// 监听登录用户变化，自动刷新课程数据
+watch(currentUser, (newUser) => {
+  if (newUser) {
+    // 使用 reload 而不是 initialize，避免重复设置 initialized 标志
+    reload()
+  }
+})
+
+onMounted(async () => {
+  await initializeAccount()
+  await initializeData()
+})
 </script>
 
 <template>
@@ -288,7 +307,7 @@ watch(
       <section v-if="canManageAnyCourse" class="section-card">
         <div class="section-header">
           <h4>{{ editingCourseId ? '编辑课程' : '新建课程' }}</h4>
-          <p>支持上传课程成果文件，文件将保存在本地数据中。</p>
+          <p>支持上传课程成果文件，文件将保存在后端数据库中。</p>
         </div>
 
         <div class="form-grid">

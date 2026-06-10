@@ -1,28 +1,7 @@
-export type AccountRole = 'admin' | 'student' | 'teacher'
-
-export interface AccountUser {
-  id: string
-  username: string
-  displayName: string
-  bio: string
-  avatar: string | null
-  role: AccountRole
-  enterpriseEmail: string
-  createdAt: number
-  updatedAt: number
-  managedClubIds: readonly string[]
-}
-
-export interface StoredAccount extends AccountUser {
-  usernameNormalized: string
-  passwordHash: string
-  salt: string
-}
-
-export interface AccountSession {
-  userId: string
-  loginAt: number
-}
+export type {
+  AccountRole,
+  AccountUser
+} from '../../api/backend'
 
 export interface LoginPayload {
   username: string
@@ -53,7 +32,7 @@ export interface AdminUpdateAccountPayload {
   userId: string
   displayName: string
   bio: string
-  role: AccountRole
+  role: import('../../api/backend').AccountRole
   enterpriseEmail: string
   managedClubIds: string[]
   avatar?: string | null

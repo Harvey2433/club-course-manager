@@ -3,22 +3,10 @@ import {
   MAX_ACCOUNT_BIO_LENGTH,
   MAX_ENTERPRISE_EMAIL_LENGTH
 } from './constants'
-import type { AccountRole } from './types'
+import type { AccountRole } from '../../api/backend'
 
 const USERNAME_PATTERN = /^[\p{L}\p{N}_@.\-]{2,20}$/u
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-function getCryptoInstance(): Crypto {
-  if (
-    typeof globalThis === 'undefined' ||
-    !globalThis.crypto ||
-    !globalThis.crypto.subtle
-  ) {
-    throw new Error('当前环境不支持安全加密能力')
-  }
-
-  return globalThis.crypto
-}
 
 function stripControlCharacters(value: string) {
   return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
@@ -33,7 +21,7 @@ export function sanitizeUsername(value: string) {
 export function sanitizeDisplayName(value: string) {
   return stripControlCharacters(String(value || ''))
     .trim()
-    .replace(/\s{2,}/g, ' ')
+    .replace(/\s{2}/g, ' ')
 }
 
 export function sanitizeBio(value: string) {
@@ -41,17 +29,13 @@ export function sanitizeBio(value: string) {
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
     .trim()
-    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/[ \t]{2}/g, ' ')
 
   return normalized || DEFAULT_ACCOUNT_BIO
 }
 
 export function sanitizeEnterpriseEmail(value: string) {
   return stripControlCharacters(String(value || '')).trim().toLowerCase()
-}
-
-export function normalizeUsername(value: string) {
-  return sanitizeUsername(value).toLocaleLowerCase()
 }
 
 export function validateUsername(value: string) {
@@ -110,14 +94,6 @@ export function validatePassword(value: string) {
   return ''
 }
 
-export function validateAccountRole(value: string) {
-  if (value !== 'admin' && value !== 'student' && value !== 'teacher') {
-    return '账户权限类型无效'
-  }
-
-  return ''
-}
-
 export function validateEnterpriseEmail(value: string, role: AccountRole) {
   if (role !== 'teacher') {
     if (!value) {
@@ -144,51 +120,4 @@ export function validateEnterpriseEmail(value: string, role: AccountRole) {
   }
 
   return ''
-}
-
-function bytesToHex(bytes: Uint8Array) {
-  return Array.from(bytes)
-    .map((item) => item.toString(16).padStart(2, '0'))
-    .join('')
-}
-
-export function createSalt(byteLength = 16) {
-  const crypto = getCryptoInstance()
-  const bytes = new Uint8Array(byteLength)
-  crypto.getRandomValues(bytes)
-  return bytesToHex(bytes)
-}
-
-export function createAccountId() {
-  const crypto = getCryptoInstance()
-
-  if (typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID()
-  }
-
-  const bytes = new Uint8Array(16)
-  crypto.getRandomValues(bytes)
-  bytes[6] = (bytes[6] & 0x0f) | 0x40
-  bytes[8] = (bytes[8] & 0x3f) | 0x80
-
-  const hex = bytesToHex(bytes)
-  return [
-    hex.slice(0, 8),
-    hex.slice(8, 12),
-    hex.slice(12, 16),
-    hex.slice(16, 20),
-    hex.slice(20, 32)
-  ].join('-')
-}
-
-export async function sha256Hex(value: string) {
-  const crypto = getCryptoInstance()
-  const encoder = new TextEncoder()
-  const data = encoder.encode(value)
-  const digest = await crypto.subtle.digest('SHA-256', data)
-  return bytesToHex(new Uint8Array(digest))
-}
-
-export async function hashPassword(password: string, salt: string) {
-  return await sha256Hex(`${salt}:${password}`)
 }
